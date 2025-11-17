@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indian Accounting Tool</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #0d9488; /* Teal 600 */
+            --secondary-color: #f0fdf4; /* Emerald 50 */
+            --danger-color: #ef4444;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--secondary-color);
+        }
+        .tab-button.active {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .balance-label {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+        .balance-value {
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+
+    <div id="app" class="max-w-7xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 flex items-center">
+            <svg class="w-8 h-8 mr-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            Indian Accounting Manager
+        </h1>
+
+        <!-- User ID Display (Mandatory for multi-user context) -->
+        <div class="mb-4 text-sm text-gray-600">
+            Current User ID: <span id="user-id" class="font-mono bg-gray-200 px-2 py-0.5 rounded-md">Initializing...</span>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="flex border-b border-gray-300 mb-6">
+            <button class="tab-button px-6 py-3 text-sm font-medium border-b-2 border-transparent hover:border-teal-400 focus:outline-none transition active" data-tab="entry">Data Entry & Ledger</button>
+            <button class="tab-button px-6 py-3 text-sm font-medium border-b-2 border-transparent hover:border-teal-400 focus:outline-none transition" data-tab="pnl">P&L Statement</button>
+            <button class="tab-button px-6 py-3 text-sm font-medium border-b-2 border-transparent hover:border-teal-400 focus:outline-none transition" data-tab="bs">Balance Sheet</button>
+            <button class="tab-button px-6 py-3 text-sm font-medium border-b-2 border-transparent hover:border-teal-400 focus:outline-none transition" data-tab="ai">AI Analysis</button>
+        </div>
+
+        <!-- TAB CONTENT: 1. Data Entry -->
+        <div id="entry" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Transaction Form (Card) -->
+                <div class="card p-6 lg:col-span-1 h-fit">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">New Transaction</h2>
+                    <form id="transaction-form" class="space-y-4">
+                        <div>
+                            <label for="account" class="block text-sm font-medium text-gray-700">Account (Ledger)</label>
+                            <select id="account" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 p-2 border">
+                                <option value="" disabled selected>Select Account Type</option>
+                                <optgroup label="P&L - Income">
+                                    <option value="Sales">Sales Revenue</option>
+                                    <option value="Other Income">Other Income</option>
+                                </optgroup>
+                                <optgroup label="P&L - Expense">
+                                    <option value="Purchases">Purchases (Cost of Goods)</option>
+                                    <option value="Salaries Expense">Salaries Expense</option>
+                                    <option value="Rent Expense">Rent Expense</option>
+                                    <option value="Utility Expense">Utility Expense</option>
+                                    <option value="Other Expense">Other Expense</option>
+                                </optgroup>
+                                <optgroup label="B/S - Asset">
+                                    <option value="Cash">Cash</option>
+                                    <option value="Bank">Bank Account</option>
+                                    <option value="Debtors">Accounts Receivable (Debtors)</option>
+                                </optgroup>
+                                <optgroup label="B/S - Liability/Equity">
+                                    <option value="Capital">Owner's Capital (Equity)</option>
+                                    <option value="Loan Payable">Loan Payable (Liability)</option>
+                                    <option value="Creditors">Accounts Payable (Creditors)</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="type" class="block text-sm font-medium text-gray-700">Transaction Type</label>
+                            <select id="type" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 p-2 border">
+                                <option value="DEBIT">DEBIT (Dr.)</option>
+                                <option value="CREDIT">CREDIT (Cr.)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="amount" class="block text-sm font-medium text-gray-700">Amount (₹)</label>
+                            <input type="number" id="amount" required min="1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 p-2 border">
+                        </div>
+                        <div>
+                            <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+                            <input type="text" id="description" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 p-2 border">
+                        </div>
+                        <div>
+                            <label for="date" class="block text-sm font-medium text-gray-700">Date</label>
+                            <input type="date" id="date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 p-2 border" value="${new Date().toISOString().split('T')[0]}">
+                        </div>
+                        <button type="submit" class="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition">Record Transaction</button>
+                    </form>
+                </div>
+
+                <!-- Ledger (Transaction List) -->
+                <div class="card p-6 lg:col-span-2 overflow-x-auto">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">Transaction Ledger</h2>
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Debit (Dr.)</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Credit (Cr.)</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ledger-body" class="bg-white divide-y divide-gray-200">
+                            <!-- Transactions will be inserted here by JS -->
+                        </tbody>
+                    </table>
+                    <div id="ledger-empty" class="text-center text-gray-500 p-8 hidden">
+                        No transactions recorded yet. Start by adding one!
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB CONTENT: 2. Profit & Loss Statement (P&L) -->
+        <div id="pnl" class="tab-content hidden card p-8">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">Profit & Loss Statement (as per Indian Accounting Standards)</h2>
+            <div id="pnl-content">
+                <!-- Revenue Section -->
+                <div class="mb-6">
+                    <h3 class="text-xl font-semibold text-teal-700 mb-3">I. Income (Revenue)</h3>
+                    <div id="pnl-revenue-items" class="space-y-2 pl-4">
+                        <!-- Revenue items here -->
+                    </div>
+                    <div class="flex justify-end items-center mt-4 pt-2 border-t border-dashed">
+                        <span class="balance-label text-lg">Total Income:</span>
+                        <span id="total-revenue" class="balance-value text-lg ml-4 text-teal-600">₹0.00</span>
+                    </div>
+                </div>
+
+                <!-- Expense Section -->
+                <div class="mb-6">
+                    <h3 class="text-xl font-semibold text-red-700 mb-3">II. Expenses</h3>
+                    <div id="pnl-expense-items" class="space-y-2 pl-4">
+                        <!-- Expense items here -->
+                    </div>
+                    <div class="flex justify-end items-center mt-4 pt-2 border-t border-dashed">
+                        <span class="balance-label text-lg">Total Expenses:</span>
+                        <span id="total-expenses" class="balance-value text-lg ml-4 text-red-600">₹0.00</span>
+                    </div>
+                </div>
+
+                <!-- Net Profit/Loss -->
+                <div class="border-t-2 border-teal-800 pt-4">
+                    <div class="flex justify-end items-center">
+                        <span class="balance-label text-2xl">Net Profit / (Net Loss):</span>
+                        <span id="net-result" class="balance-value text-2xl ml-6">₹0.00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB CONTENT: 3. Balance Sheet -->
+        <div id="bs" class="tab-content hidden card p-8">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">Balance Sheet (as on date)</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- LIABILITIES & EQUITY -->
+                <div>
+                    <h3 class="text-xl font-semibold mb-4 text-teal-700 bg-teal-50 p-2 rounded-t-md">Liabilities & Owner's Equity</h3>
+                    <div class="space-y-4">
+                        <h4 class="font-bold text-gray-700 mt-4">A. Equity</h4>
+                        <div id="bs-equity-items" class="pl-4 space-y-2">
+                            <div class="flex justify-between border-b pb-1"><span>Owner's Capital</span><span id="bs-capital">₹0.00</span></div>
+                            <div class="flex justify-between border-b pb-1"><span>Add: Net Profit / (Less: Net Loss)</span><span id="bs-net-result">₹0.00</span></div>
+                        </div>
+                        <div class="flex justify-between items-center mt-4 pt-2 border-t-2 border-dashed">
+                            <span class="font-bold">Total Equity:</span>
+                            <span id="total-equity" class="balance-value text-lg">₹0.00</span>
+                        </div>
+
+                        <h4 class="font-bold text-gray-700 mt-6">B. Liabilities</h4>
+                        <div id="bs-liability-items" class="pl-4 space-y-2">
+                            <!-- Liability items here -->
+                        </div>
+                        <div class="flex justify-between items-center mt-4 pt-2 border-t-2 border-dashed">
+                            <span class="font-bold">Total Liabilities:</span>
+                            <span id="total-liabilities" class="balance-value text-lg">₹0.00</span>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center mt-6 pt-4 border-t-4 border-teal-800">
+                        <span class="balance-label text-xl">TOTAL LIABILITIES & EQUITY:</span>
+                        <span id="grand-total-liabilities" class="balance-value text-xl text-teal-600">₹0.00</span>
+                    </div>
+                </div>
+
+                <!-- ASSETS -->
+                <div>
+                    <h3 class="text-xl font-semibold mb-4 text-emerald-700 bg-emerald-50 p-2 rounded-t-md">Assets</h3>
+                    <div id="bs-asset-items" class="space-y-2 pl-4">
+                        <!-- Asset items here -->
+                    </div>
+                    <div class="flex justify-between items-center mt-4 pt-2 border-t-2 border-dashed">
+                        <span class="font-bold text-lg">Total Assets:</span>
+                        <span id="total-assets" class="balance-value text-lg">₹0.00</span>
+                    </div>
+
+                    <div class="flex justify-between items-center mt-6 pt-4 border-t-4 border-teal-800">
+                        <span class="balance-label text-xl">TOTAL ASSETS:</span>
+                        <span id="grand-total-assets" class="balance-value text-xl text-emerald-600">₹0.00</span>
+                    </div>
+
+                    <!-- Balancing Status -->
+                    <div id="balance-check" class="mt-6 p-4 rounded-md text-center font-bold">
+                        <!-- Status message here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB CONTENT: 4. AI Analysis -->
+        <div id="ai" class="tab-content hidden card p-8">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">AI-Powered Accounting Analysis</h2>
+            <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6 rounded-md">
+                <p class="text-sm text-blue-700">Use this tool to ask for accounting help, financial analysis based on your data, or general Indian Accounting Standard (Ind AS) information. Responses are grounded by Google Search for accuracy.</p>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-4 mb-6">
+                <input type="text" id="ai-prompt" placeholder="e.g., Explain the concept of 'Going Concern' under Ind AS" class="flex-grow rounded-md border-gray-300 shadow-sm p-3 border">
+                <button id="analyze-button" class="py-3 px-6 rounded-md shadow-sm text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition disabled:opacity-50" disabled>
+                    <span id="analyze-text">Analyze</span>
+                    <span id="analyze-loader" class="hidden">...Loading</span>
+                </button>
+            </div>
+
+            <div id="ai-output" class="p-4 bg-gray-50 rounded-lg shadow-inner min-h-[150px] space-y-4">
+                <p id="ai-text" class="text-gray-700 italic">Your analysis will appear here.</p>
+                <div id="ai-sources" class="text-sm text-gray-500 space-y-1 mt-4 border-t pt-2 hidden">
+                    <p class="font-medium">Sources:</p>
+                    <ul id="ai-source-list"></ul>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Firebase Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, onSnapshot, collection, query, orderBy, deleteDoc, Timestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app, db, auth, userId = null;
+        let isAuthReady = false;
+        let currentTransactions = [];
+
+        // Set Firebase Log Level
+        setLogLevel('error'); // Reduced logging for cleaner console
+
+        // --- Core Utility Functions ---
+
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR',
+                minimumFractionDigits: 2
+            }).format(amount);
+        };
+
+        const showErrorModal = (message) => {
+            console.error(message);
+            const appDiv = document.getElementById('app');
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50';
+            errorDiv.innerHTML = `
+                <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+                    <h3 class="text-xl font-bold text-red-600 mb-4">Error</h3>
+                    <p class="text-gray-700 mb-6">${message}</p>
+                    <button onclick="this.closest('.fixed').remove()" class="w-full py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Close</button>
+                </div>
+            `;
+            appDiv.appendChild(errorDiv);
+        };
+
+        // --- Accounting Logic ---
+
+        const calculateFinancials = (transactions) => {
+            const financials = {
+                revenue: 0,
+                expenses: 0,
+                assets: 0,
+                liabilities: 0,
+                equity: 0,
+                netResult: 0,
+                pnlItems: {},
+                bsItems: { assets: {}, liabilities: {}, equity: {} },
+                capital: 0,
+            };
+
+            const PNL_ACCOUNTS = ['Sales', 'Other Income', 'Purchases', 'Salaries Expense', 'Rent Expense', 'Utility Expense', 'Other Expense'];
+            const INCOME = ['Sales', 'Other Income'];
+            const ASSETS = ['Cash', 'Bank', 'Debtors'];
+            const LIABILITIES = ['Loan Payable', 'Creditors'];
+            const EQUITY = ['Capital'];
+
+            transactions.forEach(t => {
+                const amount = parseFloat(t.amount);
+                const debit = t.type === 'DEBIT' ? amount : 0;
+                const credit = t.type === 'CREDIT' ? amount : 0;
+                const netChange = credit - debit;
+
+                // 1. P&L Calculation (Net Change = Credit - Debit)
+                if (PNL_ACCOUNTS.includes(t.account)) {
+                    financials.pnlItems[t.account] = (financials.pnlItems[t.account] || 0) + netChange;
+                }
+
+                // 2. B/S Calculation (T-Account Balance)
+                if (ASSETS.includes(t.account)) {
+                    financials.bsItems.assets[t.account] = (financials.bsItems.assets[t.account] || 0) + (debit - credit);
+                } else if (LIABILITIES.includes(t.account)) {
+                    financials.bsItems.liabilities[t.account] = (financials.bsItems.liabilities[t.account] || 0) + (credit - debit);
+                } else if (EQUITY.includes(t.account)) {
+                    financials.bsItems.equity[t.account] = (financials.bsItems.equity[t.account] || 0) + (credit - debit);
+                }
+            });
+
+            // Finalize P&L Totals
+            Object.entries(financials.pnlItems).forEach(([account, balance]) => {
+                if (INCOME.includes(account)) {
+                    financials.revenue += balance;
+                } else { // Expenses
+                    financials.expenses += balance;
+                }
+            });
+            financials.netResult = financials.revenue - financials.expenses;
+
+            // Finalize B/S Totals
+            financials.assets = Object.values(financials.bsItems.assets).reduce((sum, val) => sum + val, 0);
+            financials.liabilities = Object.values(financials.bsItems.liabilities).reduce((sum, val) => sum + val, 0);
+            financials.capital = financials.bsItems.equity.Capital || 0; // Use Capital as the base equity
+            financials.equity = financials.capital + financials.netResult;
+
+
+            return financials;
+        };
+
+        const renderLedger = (transactions) => {
+            const tbody = document.getElementById('ledger-body');
+            tbody.innerHTML = '';
+            document.getElementById('ledger-empty').classList.toggle('hidden', transactions.length > 0);
+
+            transactions
+                .sort((a, b) => new Date(a.date) - new Date(b.date))
+                .forEach(t => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition';
+                tr.innerHTML = `
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${t.date}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${t.account}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-700">${t.description}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-right font-mono text-red-600">${t.type === 'DEBIT' ? formatCurrency(t.amount) : '₹0.00'}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-right font-mono text-green-600">${t.type === 'CREDIT' ? formatCurrency(t.amount) : '₹0.00'}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-right text-sm font-medium">
+                        <button class="text-red-600 hover:text-red-900 ml-2" data-id="${t.id}" onclick="deleteTransaction('${t.id}')">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        };
+
+        const renderPNL = (financials) => {
+            const { pnlItems, revenue, expenses, netResult } = financials;
+            const revenueList = document.getElementById('pnl-revenue-items');
+            const expenseList = document.getElementById('pnl-expense-items');
+            revenueList.innerHTML = '';
+            expenseList.innerHTML = '';
+
+            const INCOME = ['Sales', 'Other Income'];
+
+            // Populate Revenue
+            Object.entries(pnlItems).filter(([account]) => INCOME.includes(account)).forEach(([account, balance]) => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between border-b pb-1 text-teal-700';
+                div.innerHTML = `<span>${account}</span><span class="font-medium">${formatCurrency(balance)}</span>`;
+                revenueList.appendChild(div);
+            });
+
+            // Populate Expenses
+            Object.entries(pnlItems).filter(([account]) => !INCOME.includes(account)).forEach(([account, balance]) => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between border-b pb-1 text-red-700';
+                // Expenses are normally debit, so balance is positive for P&L presentation
+                div.innerHTML = `<span>${account}</span><span class="font-medium">${formatCurrency(-balance)}</span>`;
+                expenseList.appendChild(div);
+            });
+
+            document.getElementById('total-revenue').textContent = formatCurrency(revenue);
+            document.getElementById('total-expenses').textContent = formatCurrency(expenses);
+
+            const resultEl = document.getElementById('net-result');
+            resultEl.textContent = formatCurrency(Math.abs(netResult));
+            resultEl.classList.remove('text-teal-600', 'text-red-600');
+            resultEl.classList.add(netResult >= 0 ? 'text-teal-600' : 'text-red-600');
+            resultEl.textContent = (netResult < 0 ? '(' : '') + formatCurrency(Math.abs(netResult)) + (netResult < 0 ? ')' : '');
+        };
+
+        const renderBalanceSheet = (financials) => {
+            const { bsItems, netResult, assets, liabilities, equity, capital } = financials;
+            const assetList = document.getElementById('bs-asset-items');
+            const liabilityList = document.getElementById('bs-liability-items');
+            assetList.innerHTML = '';
+            liabilityList.innerHTML = '';
+
+            // Populate Assets
+            Object.entries(bsItems.assets).filter(([, balance]) => balance > 0).forEach(([account, balance]) => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between border-b pb-1';
+                div.innerHTML = `<span>${account}</span><span class="font-medium">${formatCurrency(balance)}</span>`;
+                assetList.appendChild(div);
+            });
+
+            // Populate Liabilities
+            Object.entries(bsItems.liabilities).filter(([, balance]) => balance > 0).forEach(([account, balance]) => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between border-b pb-1';
+                div.innerHTML = `<span>${account}</span><span class="font-medium">${formatCurrency(balance)}</span>`;
+                liabilityList.appendChild(div);
+            });
+
+            // Render Equity Components
+            document.getElementById('bs-capital').textContent = formatCurrency(capital);
+            const netResultDisplay = (netResult < 0 ? '(Loss) ' : '(Profit) ') + formatCurrency(Math.abs(netResult));
+            document.getElementById('bs-net-result').textContent = netResultDisplay;
+
+            document.getElementById('total-equity').textContent = formatCurrency(equity);
+            document.getElementById('total-liabilities').textContent = formatCurrency(liabilities);
+            document.getElementById('grand-total-liabilities').textContent = formatCurrency(liabilities + equity);
+            document.getElementById('total-assets').textContent = formatCurrency(assets);
+            document.getElementById('grand-total-assets').textContent = formatCurrency(assets);
+
+            // Check Balance
+            const totalLiabilitiesEquity = liabilities + equity;
+            const isBalanced = Math.abs(assets - totalLiabilitiesEquity) < 0.01; // Allow for floating point tolerance
+            const balanceCheckEl = document.getElementById('balance-check');
+
+            balanceCheckEl.classList.remove('bg-green-100', 'bg-red-100', 'text-green-800', 'text-red-800');
+            if (isBalanced) {
+                balanceCheckEl.classList.add('bg-green-100', 'text-green-800');
+                balanceCheckEl.innerHTML = `✅ BALANCE SHEET BALANCED: ₹${formatCurrency(assets)} = ₹${formatCurrency(totalLiabilitiesEquity)}`;
+            } else {
+                const difference = Math.abs(assets - totalLiabilitiesEquity);
+                balanceCheckEl.classList.add('bg-red-100', 'text-red-800');
+                balanceCheckEl.innerHTML = `❌ BALANCE SHEET UNBALANCED by ${formatCurrency(difference)}. Assets and Liabilities+Equity must match!`;
+            }
+        };
+
+        const renderFinancialStatements = (transactions) => {
+            currentTransactions = transactions;
+            renderLedger(transactions);
+            const financials = calculateFinancials(transactions);
+            renderPNL(financials);
+            renderBalanceSheet(financials);
+        };
+
+
+        // --- Firebase Setup and Data Operations ---
+
+        const initializeFirebase = async () => {
+            try {
+                if (Object.keys(firebaseConfig).length === 0) {
+                    throw new Error("Firebase configuration is missing.");
+                }
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // 1. Authentication
+                onAuthStateChanged(auth, async (user) => {
+                    if (!user) {
+                        try {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (e) {
+                            showErrorModal("Failed to sign in. Please check console for details.");
+                            console.error("Auth Error:", e);
+                            isAuthReady = true;
+                            return;
+                        }
+                    }
+
+                    // 2. Auth is ready
+                    userId = auth.currentUser?.uid || 'anonymous';
+                    document.getElementById('user-id').textContent = userId;
+                    isAuthReady = true;
+                    // Start listening to data once authenticated
+                    listenForTransactions();
+                });
+
+            } catch (error) {
+                showErrorModal(`Firebase Init Failed: ${error.message}`);
+            }
+        };
+
+        const listenForTransactions = () => {
+            if (!db || !userId) return;
+
+            // Collection path: /artifacts/{appId}/users/{userId}/indian_transactions
+            const transactionsRef = collection(db, `artifacts/${appId}/users/${userId}/indian_transactions`);
+
+            // Use onSnapshot for real-time updates
+            onSnapshot(transactionsRef, (snapshot) => {
+                const transactions = [];
+                snapshot.forEach(doc => {
+                    transactions.push({ id: doc.id, ...doc.data() });
+                });
+                renderFinancialStatements(transactions);
+            }, (error) => {
+                showErrorModal("Error fetching real-time transactions. Check your connection and security rules.");
+                console.error("Firestore Snapshot Error:", error);
+            });
+        };
+
+        const addTransaction = async (event) => {
+            event.preventDefault();
+            if (!db || !userId) return showErrorModal("Database not initialized.");
+
+            const form = event.target;
+            const transaction = {
+                date: form.date.value,
+                account: form.account.value,
+                type: form.type.value,
+                amount: parseFloat(form.amount.value),
+                description: form.description.value,
+                createdAt: Timestamp.now()
+            };
+
+            try {
+                const transactionsRef = collection(db, `artifacts/${appId}/users/${userId}/indian_transactions`);
+                await addDoc(transactionsRef, transaction);
+                form.reset();
+                document.getElementById('date').value = new Date().toISOString().split('T')[0]; // Reset date to today
+            } catch (e) {
+                showErrorModal("Failed to add transaction.");
+                console.error("Error adding document: ", e);
+            }
+        };
+
+        window.deleteTransaction = async (id) => {
+            if (!db || !userId) return showErrorModal("Database not initialized.");
+
+            // Use a custom modal instead of alert/confirm
+            const appDiv = document.getElementById('app');
+            const deleteModal = document.createElement('div');
+            deleteModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50';
+            deleteModal.innerHTML = `
+                <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+                    <h3 class="text-xl font-bold text-red-600 mb-4">Confirm Deletion</h3>
+                    <p class="text-gray-700 mb-6">Are you sure you want to delete this transaction? This action cannot be undone.</p>
+                    <div class="flex justify-end space-x-4">
+                        <button onclick="this.closest('.fixed').remove()" class="py-2 px-4 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">Cancel</button>
+                        <button id="confirm-delete-btn" class="py-2 px-4 bg-red-600 text-white rounded-md hover:bg-red-700">Delete</button>
+                    </div>
+                </div>
+            `;
+            appDiv.appendChild(deleteModal);
+
+            document.getElementById('confirm-delete-btn').onclick = async () => {
+                try {
+                    const docRef = doc(db, `artifacts/${appId}/users/${userId}/indian_transactions`, id);
+                    await deleteDoc(docRef);
+                    deleteModal.remove();
+                } catch (e) {
+                    showErrorModal("Failed to delete transaction.");
+                    console.error("Error deleting document: ", e);
+                    deleteModal.remove();
+                }
+            };
+        };
+
+
+        // --- Gemini AI Analysis ---
+
+        const LLM_MODEL = "gemini-2.5-flash-preview-09-2025";
+        const API_KEY = ""; // Kept empty, provided by environment
+
+        const runAnalysis = async () => {
+            const promptInput = document.getElementById('ai-prompt');
+            const outputText = document.getElementById('ai-text');
+            const analyzeBtn = document.getElementById('analyze-button');
+            const loader = document.getElementById('analyze-loader');
+            const sourcesDiv = document.getElementById('ai-sources');
+            const sourceList = document.getElementById('ai-source-list');
+
+            let userQuery = promptInput.value.trim();
+            if (!userQuery) {
+                outputText.textContent = "Please enter a question or analysis request.";
+                outputText.classList.add('italic');
+                return;
+            }
+
+            // Append current transaction data to the prompt for context-aware analysis
+            const transactionsContext = JSON.stringify(currentTransactions, null, 2);
+            const fullPrompt = `User Query: ${userQuery}\n\n--- Current Transaction Data (JSON) ---\n${transactionsContext}\n\n--- TASK ---\nAnalyze the data provided and answer the user's query in the context of Indian Accounting Standards (Ind AS) and finance. If the query is a general accounting question, answer it directly using grounded information. Provide a detailed, easy-to-read response.`;
+
+            // UI State: Loading
+            analyzeBtn.disabled = true;
+            document.getElementById('analyze-text').classList.add('hidden');
+            loader.classList.remove('hidden');
+            outputText.textContent = "Thinking...";
+            outputText.classList.remove('italic');
+            sourcesDiv.classList.add('hidden');
+            sourceList.innerHTML = '';
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${LLM_MODEL}:generateContent?key=${API_KEY}`;
+            const payload = {
+                contents: [{ parts: [{ text: fullPrompt }] }],
+                tools: [{ "google_search": {} }],
+                systemInstruction: {
+                    parts: [{ text: "You are a specialized Indian Financial Analyst and Accounting Tutor. Provide concise, professional, and well-structured answers." }]
+                },
+            };
+
+            let response = null;
+            let attempts = 0;
+            const MAX_RETRIES = 3;
+            const baseDelay = 1000;
+
+            // Exponential Backoff Retry Loop
+            while (attempts < MAX_RETRIES) {
+                try {
+                    response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.status === 429) {
+                        attempts++;
+                        if (attempts < MAX_RETRIES) {
+                            const delay = baseDelay * (2 ** attempts) + Math.random() * 1000;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue; // Retry
+                        } else {
+                            throw new Error("API rate limit exceeded after multiple retries.");
+                        }
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    break; // Success
+                } catch (error) {
+                    attempts++;
+                    if (attempts >= MAX_RETRIES) throw error;
+                    const delay = baseDelay * (2 ** attempts) + Math.random() * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+
+
+            try {
+                const result = await response.json();
+                const candidate = result.candidates?.[0];
+
+                if (candidate && candidate.content?.parts?.[0]?.text) {
+                    const text = candidate.content.parts[0].text;
+                    outputText.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>'); // Simple Markdown to HTML
+
+                    let sources = [];
+                    const groundingMetadata = candidate.groundingMetadata;
+                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                        sources = groundingMetadata.groundingAttributions
+                            .map(attribution => ({
+                                uri: attribution.web?.uri,
+                                title: attribution.web?.title,
+                            }))
+                            .filter(source => source.uri && source.title);
+                    }
+
+                    if (sources.length > 0) {
+                        sourcesDiv.classList.remove('hidden');
+                        sources.forEach((source, index) => {
+                            const li = document.createElement('li');
+                            li.innerHTML = `<a href="${source.uri}" target="_blank" class="text-teal-600 hover:underline">${source.title}</a>`;
+                            sourceList.appendChild(li);
+                        });
+                    }
+                } else {
+                    outputText.textContent = "I couldn't generate a meaningful response. Please refine your query.";
+                    outputText.classList.add('italic');
+                }
+            } catch (e) {
+                outputText.textContent = `An error occurred during analysis: ${e.message}`;
+                console.error("Gemini Response Processing Error:", e);
+            } finally {
+                // UI State: Reset
+                analyzeBtn.disabled = false;
+                document.getElementById('analyze-text').classList.remove('hidden');
+                loader.classList.add('hidden');
+            }
+        };
+
+        // --- Event Listeners and Initialization ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set up tab switching
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
+
+                    button.classList.add('active');
+                    document.getElementById(button.dataset.tab).classList.remove('hidden');
+                });
+            });
+
+            // Set initial tab state
+            document.querySelector('.tab-button[data-tab="entry"]').classList.add('active');
+            document.getElementById('entry').classList.remove('hidden');
+
+            // Form submission listener
+            document.getElementById('transaction-form').addEventListener('submit', addTransaction);
+
+            // AI button listener
+            document.getElementById('analyze-button').addEventListener('click', runAnalysis);
+            document.getElementById('ai-prompt').addEventListener('input', () => {
+                 document.getElementById('analyze-button').disabled = !document.getElementById('ai-prompt').value.trim();
+            });
+
+            // Initialize Firebase
+            initializeFirebase();
+        });
+
+    </script>
+</body>
+</html>
