@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>TallyPro — Optimized (Offline)</title>
+<style>
+/* Compact, critical styling only */
+:root{
+  --bg:#f7fafc; --card:#fff; --muted:#6b7280; --accent:#046bd2;
+  --accent-2:#045cb4; --radius:10px; --gap:12px; --shadow:0 6px 18px rgba(15,23,42,0.06);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Segoe UI Mono", monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:#0f172a}
+.container{max-width:1100px;margin:24px auto;padding:18px}
+.header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.brand{font-weight:700;font-size:1.2rem;color:var(--accent)}
+.small{font-size:0.9rem;color:var(--muted)}
+.card{background:var(--card);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
+.row{display:flex;gap:12px;align-items:center}
+.controls{display:flex;gap:8px;flex-wrap:wrap}
+.btn{background:var(--accent);color:#fff;padding:8px 12px;border-radius:8px;border:0;cursor:pointer;font-weight:600}
+.btn-ghost{background:transparent;border:1px solid #e6eef9;color:var(--accent);padding:7px 10px;border-radius:8px;cursor:pointer}
+.input,select,textarea{padding:8px;border-radius:8px;border:1px solid #e6eef9;font-size:0.95rem}
+.table{width:100%;border-collapse:collapse;margin-top:12px}
+.table th,.table td{padding:8px 10px;border-bottom:1px solid #eef2f7;text-align:left;font-size:0.95rem}
+.grid{display:grid;grid-template-columns:1fr 360px;gap:12px;margin-top:12px}
+@media(max-width:920px){.grid{grid-template-columns:1fr}.header{flex-direction:column;align-items:flex-start}}
+.tabbar{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.tab{padding:8px 12px;border-radius:8px;background:#fff;border:1px solid #eef2f7;cursor:pointer}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.kv{display:flex;justify-content:space-between;padding:6px 0}
+.center{display:flex;align-items:center;justify-content:center}
+.small-muted{font-size:0.85rem;color:var(--muted)}
+.mono{font-family:var(--mono);font-size:0.9rem}
+.footer{margin-top:18px;text-align:center;color:var(--muted);font-size:0.85rem}
+.badge{background:#eef6ff;color:var(--accent);padding:4px 8px;border-radius:999px;font-weight:700}
+.icon-btn{background:transparent;border:0;cursor:pointer;color:var(--accent)}
+.tiny{font-size:0.8rem;color:#999}
+.sep{height:1px;background:#f1f5f9;margin:12px 0;border-radius:2px}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div>
+      <div class="brand">TallyPro — Optimized</div>
+      <div class="small">Offline accounting — same design, faster</div>
+    </div>
+    <div class="controls">
+      <button class="btn" id="btnExport">Export JSON</button>
+      <button class="btn-ghost" id="btnImport">Import JSON</button>
+      <button class="btn-ghost" id="btnClear" title="Clear all local data">Clear Data</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="tabbar" id="tabs">
+      <div class="tab active" data-tab="transactions">Transactions</div>
+      <div class="tab" data-tab="pl">Profit &amp; Loss</div>
+      <div class="tab" data-tab="bs">Balance Sheet</div>
+      <div class="tab" data-tab="depr">Depreciation</div>
+      <div class="tab" data-tab="deductions">Deductions</div>
+    </div>
+
+    <div id="view" style="margin-top:12px">
+      <!-- views rendered here -->
+      <div id="transactions" class="view">
+        <div class="row" style="justify-content:space-between;gap:12px">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="accFilter" class="input" style="width:200px">
+              <option value="all">Account: All</option>
+            </select>
+            <input id="search" class="input" placeholder="Search description..." style="width:260px">
+            <button class="btn-ghost" id="btnNewTxn">+ New Transaction</button>
+          </div>
+          <div class="small-muted mono" id="summaryNet">Net: 0.00</div>
+        </div>
+
+        <div id="txnForm" style="margin-top:12px;display:none">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="desc" class="input" placeholder="Description" style="min-width:200px;flex:1">
+            <input id="amt" class="input" placeholder="Amount (negative for expense)" style="width:200px">
+            <select id="type" class="input" style="width:160px">
+              <option value="other">Other</option>
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+              <option value="liability">Liability</option>
+            </select>
+            <select id="acct" class="input" style="width:220px"></select>
+            <button class="btn" id="saveTxn">Save</button>
+            <button class="btn-ghost" id="cancelTxn">Cancel</button>
+          </div>
+        </div>
+
+        <table class="table" id="txTable" aria-live="polite">
+          <thead>
+            <tr><th>Description</th><th>Type</th><th>Account</th><th style="text-align:right">Amount</th><th>Date</th><th></th></tr>
+          </thead>
+          <tbody id="txBody"></tbody>
+        </table>
+      </div>
+
+      <div id="pl" class="view" style="display:none">
+        <div class="grid">
+          <div>
+            <h3>Profit &amp; Loss</h3>
+            <div class="card">
+              <div class="kv"><div class="small-muted">Total Income</div><div id="plIncome" class="mono">0.00</div></div>
+              <div class="kv"><div class="small-muted">Total Expenses</div><div id="plExpense" class="mono">0.00</div></div>
+              <div class="kv"><div class="small-muted">Depreciation Expense</div><div id="plDep" class="mono">0.00</div></div>
+              <div class="kv" style="font-weight:700"><div>Net Profit</div><div id="plNet" class="mono">0.00</div></div>
+              <div class="sep"></div>
+              <div class="small-muted tiny">Notes: Depreciation and deductions applied below reduce net.</div>
+            </div>
+          </div>
+          <div>
+            <h4>Quick add</h4>
+            <div class="card">
+              <input id="quickDesc" class="input" placeholder="desc" style="width:100%;margin-bottom:8px">
+              <input id="quickAmt" class="input" placeholder="amt" style="width:100%;margin-bottom:8px">
+              <button class="btn" id="quickAdd">Add</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="bs" class="view" style="display:none">
+        <div class="grid">
+          <div>
+            <h3>Balance Sheet</h3>
+            <div class="card">
+              <div class="kv"><div class="small-muted">Assets (Cash + Assets)</div><div id="bsAssets" class="mono">0.00</div></div>
+              <div class="kv"><div class="small-muted">Liabilities</div><div id="bsLiab" class="mono">0.00</div></div>
+              <div class="kv" style="font-weight:700"><div>Equity (A - L)</div><div id="bsEquity" class="mono">0.00</div></div>
+              <div class="sep"></div>
+              <h4>Assets detail</h4>
+              <div id="assetsList" class="small-muted"></div>
+            </div>
+          </div>
+          <div>
+            <h4>Accounts</h4>
+            <div class="card">
+              <div style="display:flex;gap:8px;margin-bottom:8px">
+                <input id="accName" class="input" placeholder="Account name" style="flex:1">
+                <button class="btn" id="addAcc">Add</button>
+              </div>
+              <div id="accList" class="small-muted"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="depr" class="view" style="display:none">
+        <h3>Depreciation</h3>
+        <div class="grid">
+          <div>
+            <div class="card">
+              <h4>Assets</h4>
+              <div id="deprAssets"></div>
+              <div class="sep"></div>
+              <h4>Schedule (straight-line)</h4>
+              <div id="deprSchedule" class="small-muted mono"></div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <h4>Add Asset</h4>
+              <input id="assetName" class="input" placeholder="Asset name" style="width:100%;margin-bottom:8px">
+              <input id="assetCost" class="input" placeholder="Cost" style="width:100%;margin-bottom:8px">
+              <input id="assetLife" class="input" placeholder="Useful life (years)" style="width:100%;margin-bottom:8px">
+              <button class="btn" id="addAsset">Add Asset</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="deductions" class="view" style="display:none">
+        <h3>Deductions &amp; Taxes</h3>
+        <div class="grid">
+          <div>
+            <div class="card">
+              <h4>Deductions</h4>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+                <input id="dedName" class="input" placeholder="Deduction name" style="flex:1">
+                <input id="dedAmt" class="input" placeholder="Amount" style="width:150px">
+                <button class="btn" id="addDed">Add</button>
+              </div>
+              <div id="dedList" class="small-muted"></div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <h4>Tax estimate</h4>
+              <div class="kv"><div class="small-muted">Taxable Income</div><div id="taxable" class="mono">0.00</div></div>
+              <div class="kv"><div class="small-muted">Tax Rate (%)</div><div><input id="taxRate" class="input" value="25" style="width:100px"></div></div>
+              <div class="kv"><div class="small-muted">Estimated Tax</div><div id="estTax" class="mono">0.00</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div> <!-- view -->
+  </div> <!-- card -->
+
+  <div class="footer">TallyPro — Optimized offline build • Your data stays local</div>
+</div>
+
+<!-- Minimal, efficient script (deferred by being at end). Compact and clear. -->
+<script>
+/*
+  TallyPro_Optimized.js - compact accounting logic
+  - Data models stored in localStorage under key TP_DATA_V1
+  - Models: txs[], accounts[], assets[], deductions[]
+*/
+(function(){
+  const LS_KEY = 'TP_DATA_V1';
+  // default data
+  const defaults = {
+    txs: [], // {id,desc,amt,type,account,date}
+    accounts: [{id:'cash',name:'Cash'}],
+    assets: [], // {id,name,cost,lifeYears,placedDate}
+    deductions: [] // {id,name,amt}
+  };
+
+  // load / save
+  function load(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      return raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(defaults));
+    }catch(e){ return JSON.parse(JSON.stringify(defaults)); }
+  }
+  function save(){ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+
+  // small helpers
+  const $ = id => document.getElementById(id);
+  const fmt = n => Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+  const uid = (p='id') => p + '_' + Math.random().toString(36).slice(2,9);
+  const today = ()=> new Date().toISOString();
+
+  // state
+  let state = load();
+
+  // DOM areas
+  const tabs = document.querySelectorAll('.tab');
+  const views = document.querySelectorAll('.view');
+
+  // tab switching
+  tabs.forEach(t=>t.addEventListener('click',()=>{
+    tabs.forEach(x=>x.classList.toggle('active', x===t));
+    views.forEach(v=>v.style.display = (v.id === t.dataset.tab) ? '' : 'none');
+    renderAll(); // ensure content is current
+  }));
+
+  // Export / import / clear
+  $('btnExport').addEventListener('click', ()=>{
+    const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'tallypro-data.json'; a.click();
+    URL.revokeObjectURL(url);
+  });
+  $('btnImport').addEventListener('click', ()=>{
+    const inp = document.createElement('input'); inp.type='file'; inp.accept='application/json';
+    inp.onchange = e=>{
+      const f = e.target.files[0]; if(!f) return;
+      const r = new FileReader();
+      r.onload = ev=> {
+        try{
+          const j = JSON.parse(ev.target.result);
+          // basic validation
+          state = Object.assign({}, defaults, j);
+          save(); renderAll(); alert('Import successful');
+        }catch(err){ alert('Invalid file'); }
+      }; r.readAsText(f);
+    }; inp.click();
+  });
+  $('btnClear').addEventListener('click', ()=>{
+    if(confirm('Clear all local TallyPro data? This cannot be undone.')){
+      state = JSON.parse(JSON.stringify(defaults));
+      save(); renderAll();
+    }
+  });
+
+  // accounts
+  function populateAccountsSelect(){
+    const acctSel = $('acct');
+    const filter = $('accFilter');
+    acctSel.innerHTML = '';
+    filter.innerHTML = '<option value="all">Account: All</option>';
+    state.accounts.forEach(a=>{
+      const o = document.createElement('option'); o.value = a.id; o.textContent = a.name; acctSel.appendChild(o);
+      const o2 = document.createElement('option'); o2.value = a.id; o2.textContent = a.name; filter.appendChild(o2);
+    });
+    // also fill side list
+    const accList = $('accList'); accList.innerHTML = '';
+    state.accounts.forEach(a=>{
+      const div = document.createElement('div'); div.className='kv';
+      div.innerHTML = `<div>${a.name}</div><div><button class="icon-btn" data-acc="${a.id}" title="remove">✖</button></div>`;
+      accList.appendChild(div);
+    });
+    // attach remove handlers
+    accList.querySelectorAll('[data-acc]').forEach(b=>{
+      b.onclick = ()=> {
+        const id = b.getAttribute('data-acc');
+        if(id === 'cash'){ alert('Cannot remove default Cash account'); return; }
+        if(confirm('Remove account and reassign transactions to Cash?')){
+          state.txs.forEach(t=>{ if(t.account===id) t.account='cash'; });
+          state.accounts = state.accounts.filter(x=>x.id !== id);
+          save(); renderAll();
+        }
+      };
+    });
+  }
+
+  $('addAcc').addEventListener('click', ()=>{
+    const name = $('accName').value.trim();
+    if(!name){ alert('Enter account name'); return; }
+    const id = uid('acc');
+    state.accounts.push({id,name});
+    $('accName').value='';
+    save(); populateAccountsSelect(); renderAll();
+  });
+
+  // Transactions: add / render / search
+  $('btnNewTxn').addEventListener('click', ()=> {
+    const f = $('txnForm'); f.style.display = f.style.display === 'none' ? '' : 'none';
+    if(f.style.display==='') $('desc').focus();
+  });
+  $('cancelTxn').addEventListener('click', ()=> $('txnForm').style.display='none');
+
+  $('saveTxn').addEventListener('click', ()=>{
+    const desc = $('desc').value.trim();
+    const amt = Number($('amt').value) || 0;
+    const type = $('type').value;
+    const account = $('acct').value;
+    if(!desc){ alert('Enter description'); return; }
+    const tx = { id: uid('tx'), desc, amt, type, account, date: today() };
+    state.txs.push(tx);
+    $('desc').value=''; $('amt').value=''; $('txnForm').style.display='none';
+    save(); renderAll();
+  });
+
+  $('search').addEventListener('input', ()=> renderTxTable());
+
+  // quick add in P&L
+  $('quickAdd').addEventListener('click', ()=>{
+    const d = $('quickDesc').value.trim() || 'Quick';
+    const a = Number($('quickAmt').value) || 0;
+    state.txs.push({id:uid('tx'),desc:d,amt:a,type:a>=0?'income':'expense',account:'cash',date:today()});
+    $('quickDesc').value=''; $('quickAmt').value='';
+    save(); renderAll();
+  });
+
+  // Assets (depreciation)
+  $('addAsset').addEventListener('click', ()=>{
+    const name = $('assetName').value.trim();
+    const cost = Number($('assetCost').value) || 0;
+    const life = Number($('assetLife').value) || 0;
+    if(!name || cost<=0 || life<=0){ alert('Enter valid asset, cost and life'); return; }
+    state.assets.push({id:uid('asset'),name,cost,lifeYears:life,placedDate:today()});
+    $('assetName').value=''; $('assetCost').value=''; $('assetLife').value='';
+    save(); renderAll();
+  });
+
+  // Deductions
+  $('addDed').addEventListener('click', ()=>{
+    const name = $('dedName').value.trim();
+    const amt = Number($('dedAmt').value) || 0;
+    if(!name || amt<=0){ alert('Enter name and positive amount'); return; }
+    state.deductions.push({id:uid('ded'),name,amt});
+    $('dedName').value=''; $('dedAmt').value='';
+    save(); renderAll();
+  });
+
+  $('taxRate').addEventListener('input', ()=> renderDeductions());
+
+  // render pieces
+  function renderTxTable(){
+    const tbody = $('txBody'); tbody.innerHTML = '';
+    const q = $('search').value.trim().toLowerCase();
+    const filter = $('accFilter').value;
+    const rows = state.txs.slice().reverse().filter(t=>{
+      if(filter !== 'all' && t.account !== filter) return false;
+      if(!q) return true;
+      return t.desc.toLowerCase().includes(q) || t.type.toLowerCase().includes(q);
+    });
+    let sum = 0;
+    rows.forEach(t=>{
+      sum += Number(t.amt);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtml(t.desc)}</td>
+        <td class="small-muted">${escapeHtml(t.type)}</td>
+        <td class="small-muted">${accountName(t.account)}</td>
+        <td style="text-align:right">${fmt(t.amt)}</td>
+        <td class="small-muted">${(new Date(t.date)).toLocaleString()}</td>
+        <td style="text-align:right"><button class="icon-btn" data-id="${t.id}" title="delete">✖</button></td>`;
+      tbody.appendChild(tr);
+    });
+    // attach delete handlers
+    tbody.querySelectorAll('[data-id]').forEach(b=>{
+      b.onclick = ()=> {
+        const id = b.getAttribute('data-id');
+        if(confirm('Delete transaction?')){ state.txs = state.txs.filter(x=>x.id!==id); save(); renderAll(); }
+      };
+    });
+    $('summaryNet').textContent = 'Net: ' + fmt(sum);
+  }
+
+  function accountName(id){
+    const a = state.accounts.find(x=>x.id===id);
+    return a ? a.name : id || '—';
+  }
+
+  // render P&L
+  function renderPL(){
+    const income = state.txs.filter(t=>t.amt>0).reduce((s,t)=>s+Number(t.amt),0);
+    const expense = state.txs.filter(t=>t.amt<0).reduce((s,t)=>s+Number(t.amt),0);
+    const deprExpense = totalDepreciationExpense();
+    const totalDeductions = state.deductions.reduce((s,d)=>s+Number(d.amt),0);
+    // taxable = income + expense + deprExpense - deductions
+    const net = income + expense - deprExpense - totalDeductions;
+    $('plIncome').textContent = fmt(income);
+    $('plExpense').textContent = fmt(Math.abs(expense));
+    $('plDep').textContent = fmt(deprExpense);
+    $('plNet').textContent = fmt(net);
+  }
+
+  // Balance Sheet
+  function renderBS(){
+    // assets: cash (sum of transactions) + assets book value
+    const cashBalance = state.txs.reduce((s,t)=>s + (t.account === 'cash' ? Number(t.amt) : 0), 0);
+    const assetsBook = state.assets.reduce((s,a)=> s + bookValue(a), 0);
+    const assetsTotal = cashBalance + assetsBook;
+    const liabilities = state.txs.filter(t=>t.type==='liability').reduce((s,t)=> s + Number(t.amt), 0);
+    const equity = assetsTotal - liabilities;
+    $('bsAssets').textContent = fmt(assetsTotal);
+    $('bsLiab').textContent = fmt(liabilities);
+    $('bsEquity').textContent = fmt(equity);
+    // assets detail
+    const al = $('assetsList'); al.innerHTML = '';
+    state.assets.forEach(a=>{
+      const d = document.createElement('div'); d.className='kv';
+      d.innerHTML = `<div>${a.name} (${a.lifeYears}y)</div><div class="mono">${fmt(bookValue(a))}</div>`;
+      al.appendChild(d);
+    });
+  }
+
+  // Depreciation helpers: straight-line annual depreciation; prorate by years since placed
+  function bookValue(a){
+    const cost = Number(a.cost) || 0;
+    const life = Number(a.lifeYears) || 1;
+    const placed = new Date(a.placedDate || today());
+    const years = Math.max(0, (Date.now() - placed.getTime()) / (365.25*24*3600*1000));
+    const annual = cost / life;
+    const accumulated = Math.min(cost, annual * years);
+    return Math.max(0, cost - accumulated);
+  }
+  function totalDepreciationExpense(){
+    // For P&L we take depreciation for current year (simple sum of annual depreciation)
+    return state.assets.reduce((s,a)=> s + ((Number(a.cost)||0) / (Number(a.lifeYears)||1)), 0);
+  }
+  function renderDepreciation(){
+    const container = $('deprAssets'); container.innerHTML='';
+    state.assets.forEach(a=>{
+      const row = document.createElement('div'); row.className='kv';
+      row.innerHTML = `<div>${a.name}</div><div class="mono">${fmt(a.cost)}</div>`;
+      container.appendChild(row);
+    });
+    // schedule: show each asset annual depreciation
+    const sched = $('deprSchedule'); sched.innerHTML = '';
+    state.assets.forEach(a=>{
+      const annual = (Number(a.cost)||0) / (Number(a.lifeYears)||1);
+      sched.innerHTML += `${escapeHtml(a.name)} — Annual: ${fmt(annual)} over ${a.lifeYears} years<br>`;
+    });
+  }
+
+  // Deductions
+  function renderDeductions(){
+    const list = $('dedList'); list.innerHTML = '';
+    state.deductions.forEach(d=>{
+      const el = document.createElement('div'); el.className='kv';
+      el.innerHTML = `<div>${d.name}</div><div class="mono">${fmt(d.amt)} <button class="icon-btn" data-del="${d.id}" title="remove">✖</button></div>`;
+      list.appendChild(el);
+    });
+    // attach deletion
+    list.querySelectorAll('[data-del]').forEach(b=>{
+      b.onclick = ()=> {
+        const id = b.getAttribute('data-del');
+        if(confirm('Remove deduction?')){ state.deductions = state.deductions.filter(x=>x.id!==id); save(); renderAll(); }
+      };
+    });
+
+    // tax estimate
+    const income = state.txs.filter(t=>t.amt>0).reduce((s,t)=>s+Number(t.amt),0);
+    const expense = state.txs.filter(t=>t.amt<0).reduce((s,t)=>s+Number(t.amt),0);
+    const deprExpense = totalDepreciationExpense();
+    const totalDeductions = state.deductions.reduce((s,d)=>s+Number(d.amt),0);
+    const taxable = income + expense - deprExpense - totalDeductions;
+    $('taxable').textContent = fmt(taxable);
+    const rate = Number($('taxRate').value) / 100 || 0;
+    $('estTax').textContent = fmt(Math.max(0, taxable * rate));
+  }
+
+  // Utilities
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // render all sections
+  function renderAll(){
+    populateAccountsSelect();
+    renderTxTable();
+    renderPL();
+    renderBS();
+    renderDepreciation();
+    renderDeductions();
+  }
+
+  // initial seed: if no accounts, create default
+  if(!state.accounts || state.accounts.length===0) state.accounts = defaults.accounts.slice();
+
+  // expose some quick functions for convenience
+  window.TallyPro = { state, save };
+
+  // initial render
+  renderAll();
+
+  // keep UI responsive: small event delegation for table sorting (not heavy)
+  // Done.
+
+})();
+</script>
+</body>
+</html>
