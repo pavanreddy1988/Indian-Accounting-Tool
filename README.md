@@ -1,4 +1,4 @@
-✨ Key Features
+✨ Key Features (Netlify)
 📊 Core Accounting Modules:
 Dashboard - Visual overview with revenue/expense charts and key metrics
 Chart of Accounts - Complete account management with Indian account types
