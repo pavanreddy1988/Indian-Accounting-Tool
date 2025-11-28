@@ -1,0 +1,539 @@
+/*
+Tally-like Accounting Web App (Single-file React)
+- Tailwind CSS required in the project
+- Save this as `App.jsx` inside a create-react-app / Vite React project with Tailwind configured
+
+Features implemented:
+- Chart of Accounts (create/edit/delete)
+- Ledger view
+- Voucher (Journal) entry with double-entry validation (debits == credits)
+- Trial Balance, Balance Sheet, Profit & Loss report (basic computation)
+- Import/Export JSON backup
+- LocalStorage persistence (no backend required for quick demo)
+- Responsive modern UI (Tailwind), single-file for easy iteration
+
+How to run:
+1. Create a React app (Vite or CRA) and add Tailwind CSS.
+2. Replace App.jsx with this file, start the dev server.
+
+This is a demo starter — for production you'd split into files, add a backend (Postgres), security, multi-user auth, audit logs, GST/VAT modules, reporting exports, and modular architecture.
+*/
+
+import React, { useEffect, useMemo, useState } from 'react'
+
+// --- Utilities ---
+const uid = (prefix = '') => prefix + Math.random().toString(36).slice(2, 9)
+const nowISO = () => new Date().toISOString().slice(0, 10)
+
+// Default sample chart of accounts
+const defaultAccounts = [
+  { id: 'a_assets', name: 'Assets', type: 'Header', parent: null },
+  { id: 'a_cash', name: 'Cash', type: 'Ledger', parent: 'a_assets' },
+  { id: 'a_bank', name: 'Bank', type: 'Ledger', parent: 'a_assets' },
+  { id: 'a_receivable', name: 'Accounts Receivable', type: 'Ledger', parent: 'a_assets' },
+
+  { id: 'l_liabilities', name: 'Liabilities', type: 'Header', parent: null },
+  { id: 'l_payable', name: 'Accounts Payable', type: 'Ledger', parent: 'l_liabilities' },
+
+  { id: 'e_equity', name: 'Equity', type: 'Header', parent: null },
+  { id: 'e_capital', name: 'Capital', type: 'Ledger', parent: 'e_equity' },
+
+  { id: 'i_income', name: 'Income', type: 'Header', parent: null },
+  { id: 'i_sales', name: 'Sales', type: 'Ledger', parent: 'i_income' },
+
+  { id: 'e_expense', name: 'Expenses', type: 'Header', parent: null },
+  { id: 'e_rent', name: 'Rent Expense', type: 'Ledger', parent: 'e_expense' },
+  { id: 'e_salary', name: 'Salary Expense', type: 'Ledger', parent: 'e_expense' },
+]
+
+// Sample vouchers
+const defaultVouchers = [
+  {
+    id: uid('v_'),
+    date: nowISO(),
+    type: 'Journal',
+    narration: 'Opening balances',
+    lines: [
+      { accountId: 'a_cash', debit: 50000, credit: 0 },
+      { accountId: 'e_capital', debit: 0, credit: 50000 },
+    ],
+  },
+]
+
+// localStorage keys
+const LS_KEYS = { ACC: 'tl_acc_v1', VCH: 'tl_vch_v1' }
+
+// --- Core Accounting Engine (in-memory) ---
+function useAccountingEngine() {
+  const [accounts, setAccounts] = useState(() => {
+    const raw = localStorage.getItem(LS_KEYS.ACC)
+    return raw ? JSON.parse(raw) : defaultAccounts
+  })
+  const [vouchers, setVouchers] = useState(() => {
+    const raw = localStorage.getItem(LS_KEYS.VCH)
+    return raw ? JSON.parse(raw) : defaultVouchers
+  })
+
+  useEffect(() => {
+    localStorage.setItem(LS_KEYS.ACC, JSON.stringify(accounts))
+  }, [accounts])
+  useEffect(() => {
+    localStorage.setItem(LS_KEYS.VCH, JSON.stringify(vouchers))
+  }, [vouchers])
+
+  // account helpers
+  const addAccount = (name, type = 'Ledger', parent = null) => {
+    const id = uid('acc_')
+    setAccounts((s) => [...s, { id, name, type, parent }])
+    return id
+  }
+  const updateAccount = (id, patch) => setAccounts((s) => s.map((a) => (a.id === id ? { ...a, ...patch } : a)))
+  const removeAccount = (id) => {
+    // Also remove dependent ledgers? For demo we'll prevent removal if used
+    const used = vouchers.some((v) => v.lines.some((l) => l.accountId === id))
+    if (used) throw new Error('Account used in vouchers; cannot delete')
+    setAccounts((s) => s.filter((a) => a.id !== id))
+  }
+
+  // voucher helpers
+  const addVoucher = (voucher) => {
+    // Validate double entry
+    const totalDebit = voucher.lines.reduce((s, l) => s + (Number(l.debit) || 0), 0)
+    const totalCredit = voucher.lines.reduce((s, l) => s + (Number(l.credit) || 0), 0)
+    if (Math.abs(totalDebit - totalCredit) > 0.0001) throw new Error('Voucher not balanced')
+    voucher.id = uid('v_')
+    setVouchers((s) => [voucher, ...s].sort((a, b) => b.date.localeCompare(a.date)))
+  }
+  const deleteVoucher = (id) => setVouchers((s) => s.filter((v) => v.id !== id))
+
+  // compute balances by account
+  const balances = useMemo(() => {
+    const map = {}
+    accounts.forEach((a) => (map[a.id] = { account: a, debit: 0, credit: 0 }))
+    vouchers.forEach((v) => {
+      v.lines.forEach((l) => {
+        if (!map[l.accountId]) return
+        map[l.accountId].debit += Number(l.debit || 0)
+        map[l.accountId].credit += Number(l.credit || 0)
+      })
+    })
+    // final balance sign: net = debit - credit
+    const result = Object.values(map).map((r) => ({
+      id: r.account.id,
+      name: r.account.name,
+      type: r.account.type,
+      parent: r.account.parent,
+      debit: r.debit,
+      credit: r.credit,
+      balance: r.debit - r.credit,
+    }))
+    return result
+  }, [accounts, vouchers])
+
+  // Summaries: trial balance, P&L, Balance sheet
+  const trialBalance = useMemo(() => {
+    return balances.map((b) => ({ accountId: b.id, name: b.name, debit: b.balance >= 0 ? b.balance : 0, credit: b.balance < 0 ? -b.balance : 0 }))
+  }, [balances])
+
+  const profitAndLoss = useMemo(() => {
+    // sum income and expense ledgers
+    const income = balances.filter((b) => b.id.startsWith('i_') || (b.parent && b.parent.startsWith('i_')))
+    const expense = balances.filter((b) => b.id.startsWith('e_') || (b.parent && b.parent.startsWith('e_')))
+    const totalIncome = income.reduce((s, r) => s + (-Math.min(0, r.balance)), 0) // income often credit balances
+    const totalExpense = expense.reduce((s, r) => s + Math.max(0, r.balance), 0)
+    const net = totalIncome - totalExpense
+    return { totalIncome, totalExpense, net }
+  }, [balances])
+
+  const balanceSheet = useMemo(() => {
+    const assets = balances.filter((b) => b.id.startsWith('a_') || (b.parent && b.parent.startsWith('a_')))
+    const liabilities = balances.filter((b) => b.id.startsWith('l_') || (b.parent && b.parent.startsWith('l_')))
+    const equity = balances.filter((b) => b.id.startsWith('e_') || (b.parent && b.parent.startsWith('e_')))
+    const totalAssets = assets.reduce((s, r) => s + Math.max(0, r.balance), 0)
+    const totalLiabilities = liabilities.reduce((s, r) => s + -Math.min(0, r.balance), 0)
+    const totalEquity = equity.reduce((s, r) => s + -Math.min(0, r.balance), 0)
+    return { totalAssets, totalLiabilities, totalEquity }
+  }, [balances])
+
+  // import/export
+  const exportData = () => JSON.stringify({ accounts, vouchers }, null, 2)
+  const importData = (json) => {
+    const parsed = JSON.parse(json)
+    if (!parsed.accounts || !parsed.vouchers) throw new Error('Invalid backup')
+    setAccounts(parsed.accounts)
+    setVouchers(parsed.vouchers)
+  }
+
+  return {
+    accounts,
+    vouchers,
+    addAccount,
+    updateAccount,
+    removeAccount,
+    addVoucher,
+    deleteVoucher,
+    balances,
+    trialBalance,
+    profitAndLoss,
+    balanceSheet,
+    exportData,
+    importData,
+  }
+}
+
+// --- UI Components inside one file for convenience ---
+function Sidebar({ onNavigate, selected }) {
+  return (
+    <div className="w-64 bg-white shadow p-4 flex flex-col gap-4">
+      <h2 className="text-xl font-bold">Tally — Lite</h2>
+      <nav className="flex flex-col gap-2">
+        {['Dashboard', 'Chart of Accounts', 'Vouchers', 'Trial Balance', 'Reports', 'Import/Export'].map((s) => (
+          <button key={s} onClick={() => onNavigate(s)} className={`text-left px-3 py-2 rounded ${selected === s ? 'bg-sky-500 text-white' : 'hover:bg-slate-100'}`}>
+            {s}
+          </button>
+        ))}
+      </nav>
+      <div className="mt-auto text-sm text-slate-500">Demo: Local storage persistence • No backend</div>
+    </div>
+  )
+}
+
+function AccountList({ accounts, onAdd, onEdit, onDelete }) {
+  const headers = accounts.filter((a) => a.type === 'Header')
+  return (
+    <div className="p-4">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold">Chart of Accounts</h3>
+        <div>
+          <button onClick={() => onAdd(null)} className="px-3 py-1 bg-green-500 text-white rounded">Add Ledger</button>
+          <button onClick={() => onAdd('Header')} className="ml-2 px-3 py-1 bg-indigo-500 text-white rounded">Add Header</button>
+        </div>
+      </div>
+      <div className="space-y-4">
+        {headers.map((h) => (
+          <div key={h.id} className="border rounded p-3">
+            <div className="flex justify-between">
+              <div>
+                <div className="font-medium">{h.name}</div>
+                <div className="text-sm text-slate-500">Header</div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => onAdd(h.id)} className="px-2 py-1 bg-sky-500 text-white rounded">+ Ledger</button>
+                <button onClick={() => onEdit(h)} className="px-2 py-1 bg-yellow-400 text-white rounded">Edit</button>
+                <button onClick={() => onDelete(h.id)} className="px-2 py-1 bg-red-500 text-white rounded">Delete</button>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {accounts.filter((a) => a.parent === h.id).map((l) => (
+                <div key={l.id} className="p-2 border rounded flex justify-between items-center">
+                  <div>
+                    <div className="font-medium">{l.name}</div>
+                    <div className="text-xs text-slate-500">Ledger</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => onEdit(l)} className="px-2 py-1 bg-yellow-400 text-white rounded">Edit</button>
+                    <button onClick={() => onDelete(l.id)} className="px-2 py-1 bg-red-500 text-white rounded">Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function VoucherEntry({ accounts, onSave }) {
+  const [date, setDate] = useState(nowISO())
+  const [narration, setNarration] = useState('')
+  const [lines, setLines] = useState([{ id: uid(), accountId: accounts[0]?.id || '', debit: 0, credit: 0 }])
+
+  useEffect(() => {
+    if (accounts.length && !lines[0].accountId) setLines([{ ...lines[0], accountId: accounts[0].id }])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts])
+
+  const updateLine = (id, patch) => setLines((s) => s.map((l) => (l.id === id ? { ...l, ...patch } : l)))
+  const addLine = () => setLines((s) => [...s, { id: uid(), accountId: accounts[0]?.id || '', debit: 0, credit: 0 }])
+  const removeLine = (id) => setLines((s) => s.filter((l) => l.id !== id))
+
+  const totalDebit = lines.reduce((s, l) => s + Number(l.debit || 0), 0)
+  const totalCredit = lines.reduce((s, l) => s + Number(l.credit || 0), 0)
+
+  const handleSave = () => {
+    try {
+      const voucher = { date, narration, type: 'Journal', lines: lines.map((l) => ({ accountId: l.accountId, debit: Number(l.debit), credit: Number(l.credit) })) }
+      onSave(voucher)
+      setLines([{ id: uid(), accountId: accounts[0]?.id || '', debit: 0, credit: 0 }])
+      setNarration('')
+      alert('Voucher saved')
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  return (
+    <div className="p-4">
+      <h3 className="text-lg font-semibold mb-3">Voucher Entry</h3>
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        <input type="date" className="p-2 border rounded" value={date} onChange={(e) => setDate(e.target.value)} />
+        <select className="p-2 border rounded" value="Journal" disabled>
+          <option>Journal</option>
+        </select>
+        <input className="p-2 border rounded" placeholder="Narration" value={narration} onChange={(e) => setNarration(e.target.value)} />
+      </div>
+
+      <div className="space-y-2">
+        {lines.map((l) => (
+          <div key={l.id} className="grid grid-cols-4 gap-2 items-center">
+            <select className="p-2 border rounded" value={l.accountId} onChange={(e) => updateLine(l.id, { accountId: e.target.value })}>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            <input type="number" className="p-2 border rounded" value={l.debit} onChange={(e) => updateLine(l.id, { debit: Number(e.target.value) })} placeholder="Debit" />
+            <input type="number" className="p-2 border rounded" value={l.credit} onChange={(e) => updateLine(l.id, { credit: Number(e.target.value) })} placeholder="Credit" />
+            <div className="flex gap-2">
+              <button onClick={() => removeLine(l.id)} className="px-2 py-1 bg-red-500 text-white rounded">Remove</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-between items-center mt-3">
+        <div className="text-sm text-slate-600">Total Debit: {totalDebit} • Total Credit: {totalCredit}</div>
+        <div>
+          <button onClick={addLine} className="px-3 py-1 bg-sky-500 text-white rounded mr-2">Add Line</button>
+          <button onClick={handleSave} className={`px-3 py-1 rounded ${Math.abs(totalDebit - totalCredit) < 0.0001 ? 'bg-green-600 text-white' : 'bg-gray-300 text-slate-700'}`} disabled={Math.abs(totalDebit - totalCredit) >= 0.0001}>Save Voucher</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function VouchersList({ vouchers, onDelete, accountsMap }) {
+  return (
+    <div className="p-4">
+      <h3 className="text-lg font-semibold mb-3">Vouchers</h3>
+      <div className="space-y-3">
+        {vouchers.map((v) => (
+          <div key={v.id} className="border rounded p-3">
+            <div className="flex justify-between">
+              <div>
+                <div className="font-medium">{v.type} • {v.date}</div>
+                <div className="text-sm text-slate-500">{v.narration}</div>
+              </div>
+              <div>
+                <button onClick={() => onDelete(v.id)} className="px-2 py-1 bg-red-500 text-white rounded">Delete</button>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {v.lines.map((l, idx) => (
+                <div key={idx} className="p-2 border rounded">
+                  <div className="font-medium">{accountsMap[l.accountId]?.name || l.accountId}</div>
+                  <div className="text-sm">Debit: {l.debit} • Credit: {l.credit}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TrialBalanceView({ trialBalance }) {
+  const totalDebit = trialBalance.reduce((s, r) => s + r.debit, 0)
+  const totalCredit = trialBalance.reduce((s, r) => s + r.credit, 0)
+  return (
+    <div className="p-4">
+      <h3 className="text-lg font-semibold mb-3">Trial Balance</h3>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="text-left"><th className="pb-2">Account</th><th className="pb-2">Debit</th><th className="pb-2">Credit</th></tr>
+        </thead>
+        <tbody>
+          {trialBalance.map((r) => (
+            <tr key={r.accountId}><td className="py-1">{r.name}</td><td className="py-1">{r.debit.toFixed(2)}</td><td className="py-1">{r.credit.toFixed(2)}</td></tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="font-semibold border-t"><td className="py-2">Totals</td><td>{totalDebit.toFixed(2)}</td><td>{totalCredit.toFixed(2)}</td></tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+}
+
+function Reports({ profitAndLoss, balanceSheet }) {
+  return (
+    <div className="p-4 space-y-4">
+      <div className="border rounded p-3">
+        <h4 className="font-semibold">Profit & Loss</h4>
+        <div className="mt-2">Total Income: {profitAndLoss.totalIncome.toFixed(2)}</div>
+        <div>Total Expense: {profitAndLoss.totalExpense.toFixed(2)}</div>
+        <div className={`mt-2 font-semibold ${profitAndLoss.net >= 0 ? 'text-green-700' : 'text-red-600'}`}>Net: {profitAndLoss.net.toFixed(2)}</div>
+      </div>
+      <div className="border rounded p-3">
+        <h4 className="font-semibold">Balance Sheet (snapshot)</h4>
+        <div className="mt-2">Assets: {balanceSheet.totalAssets.toFixed(2)}</div>
+        <div>Liabilities: {balanceSheet.totalLiabilities.toFixed(2)}</div>
+        <div>Equity: {balanceSheet.totalEquity.toFixed(2)}</div>
+      </div>
+    </div>
+  )
+}
+
+function ImportExport({ exportData, importData }) {
+  const [text, setText] = useState('')
+  return (
+    <div className="p-4 space-y-3">
+      <h3 className="text-lg font-semibold">Import / Export</h3>
+      <div>
+        <button onClick={() => { const data = exportData(); navigator.clipboard.writeText(data); alert('Export copied to clipboard') }} className="px-3 py-1 bg-sky-500 text-white rounded mr-2">Copy Export</button>
+        <button onClick={() => { const data = exportData(); const blob = new Blob([data], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'tally-lite-backup.json'; a.click(); URL.revokeObjectURL(url) }} className="px-3 py-1 bg-indigo-600 text-white rounded">Download Export</button>
+      </div>
+      <div>
+        <textarea rows={10} value={text} onChange={(e) => setText(e.target.value)} className="w-full border rounded p-2" placeholder="Paste backup JSON here to import"></textarea>
+        <div className="mt-2">
+          <button onClick={() => { try { importData(text); alert('Imported') } catch (err) { alert(err.message) } }} className="px-3 py-1 bg-green-600 text-white rounded">Import</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// --- Main App ---
+export default function App() {
+  const engine = useAccountingEngine()
+
+  const [view, setView] = useState('Dashboard')
+  const [editingAccount, setEditingAccount] = useState(null)
+  const [editingParentForAdd, setEditingParentForAdd] = useState(null)
+
+  const accountsMap = useMemo(() => Object.fromEntries(engine.accounts.map((a) => [a.id, a])), [engine.accounts])
+
+  const handleAddAccount = (parent) => {
+    setEditingAccount({ mode: 'add', parent })
+  }
+  const handleEditAccount = (account) => setEditingAccount({ mode: 'edit', account })
+  const handleDeleteAccount = (id) => {
+    try { engine.removeAccount(id); alert('Deleted') } catch (err) { alert(err.message) }
+  }
+
+  const saveAccount = ({ mode, account, name, type, parent }) => {
+    if (mode === 'add') engine.addAccount(name, type === 'Header' ? 'Header' : 'Ledger', parent)
+    else engine.updateAccount(account.id, { name, type })
+    setEditingAccount(null)
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800">
+      <div className="max-w-7xl mx-auto grid grid-cols-12 gap-6 p-6">
+        <div className="col-span-12 md:col-span-3">
+          <Sidebar onNavigate={setView} selected={view} />
+        </div>
+        <div className="col-span-12 md:col-span-9 bg-white rounded shadow">
+          <div className="p-4 border-b flex justify-between items-center">
+            <div className="font-semibold text-lg">{view}</div>
+            <div className="text-sm text-slate-500">Company: Demo Co. • Date: {nowISO()}</div>
+          </div>
+          <div className="p-4">
+            {view === 'Dashboard' && (
+              <div className="grid grid-cols-3 gap-4">
+                <div className="border p-4 rounded">
+                  <div className="text-sm text-slate-500">Accounts</div>
+                  <div className="text-xl font-semibold">{engine.accounts.length}</div>
+                </div>
+                <div className="border p-4 rounded">
+                  <div className="text-sm text-slate-500">Vouchers</div>
+                  <div className="text-xl font-semibold">{engine.vouchers.length}</div>
+                </div>
+                <div className="border p-4 rounded">
+                  <div className="text-sm text-slate-500">Net Profit</div>
+                  <div className="text-xl font-semibold">{engine.profitAndLoss.net.toFixed(2)}</div>
+                </div>
+              </div>
+            )}
+
+            {view === 'Chart of Accounts' && (
+              <AccountList accounts={engine.accounts} onAdd={(p) => handleAddAccount(p)} onEdit={(a) => handleEditAccount(a)} onDelete={handleDeleteAccount} />
+            )}
+
+            {view === 'Vouchers' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <VoucherEntry accounts={engine.accounts} onSave={(v) => { engine.addVoucher(v); setView('Vouchers List') }} />
+                </div>
+                <div>
+                  <VouchersList vouchers={engine.vouchers} onDelete={(id) => { engine.deleteVoucher(id); alert('Deleted') }} accountsMap={accountsMap} />
+                </div>
+              </div>
+            )}
+
+            {view === 'Vouchers List' && (
+              <VouchersList vouchers={engine.vouchers} onDelete={(id) => { engine.deleteVoucher(id); alert('Deleted') }} accountsMap={accountsMap} />
+            )}
+
+            {view === 'Trial Balance' && (
+              <TrialBalanceView trialBalance={engine.trialBalance} />
+            )}
+
+            {view === 'Reports' && (
+              <Reports profitAndLoss={engine.profitAndLoss} balanceSheet={engine.balanceSheet} />
+            )}
+
+            {view === 'Import/Export' && (
+              <ImportExport exportData={engine.exportData} importData={engine.importData} />
+            )}
+
+          </div>
+        </div>
+      </div>
+
+      {/* Account modal */}
+      {editingAccount && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center">
+          <div className="bg-white rounded p-6 w-96">
+            <h4 className="font-semibold mb-3">{editingAccount.mode === 'add' ? 'Add Account' : 'Edit Account'}</h4>
+            <AccountForm initial={editingAccount} onCancel={() => setEditingAccount(null)} onSave={saveAccount} accounts={engine.accounts} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AccountForm({ initial, onCancel, onSave, accounts }) {
+  const mode = initial.mode
+  const parent = initial.parent
+  const [name, setName] = useState('')
+  const [type, setType] = useState('Ledger')
+
+  useEffect(() => {
+    if (mode === 'edit' && initial.account) {
+      setName(initial.account.name)
+      setType(initial.account.type)
+    }
+    if (mode === 'add') setType(parent ? 'Ledger' : 'Header')
+  }, [initial, mode, parent])
+
+  return (
+    <div>
+      <div className="mb-2 text-sm text-slate-500">Parent: {parent ? accounts.find((a) => a.id === parent)?.name : '—'}</div>
+      <div className="space-y-2">
+        <input className="w-full p-2 border rounded" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+        <select className="w-full p-2 border rounded" value={type} onChange={(e) => setType(e.target.value)}>
+          <option>Ledger</option>
+          <option>Header</option>
+        </select>
+      </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-1 rounded border">Cancel</button>
+        <button onClick={() => { if (!name) return alert('Name required'); onSave({ mode, account: initial.account, name, type, parent }) }} className="px-3 py-1 rounded bg-sky-600 text-white">Save</button>
+      </div>
+    </div>
+  )
+}
+
+// End of single-file demo app
